@@ -1,25 +1,25 @@
-﻿Log.Logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(BuildConfig())
-    .WriteTo.Console()
-    .WriteTo.File("test.txt")
-    .WriteTo.Seq("http://localhost:5341/")
-    .CreateLogger();
-
-IHost host = Host.CreateDefaultBuilder(args)
-    .UseSerilog()
+﻿var builder = Host.CreateDefaultBuilder(args)
+    .UseSerilog((hostingContext, loggerConfiguration) =>
+    {
+        loggerConfiguration
+            .ReadFrom.Configuration(hostingContext.Configuration)
+            .Enrich.FromLogContext()
+            .WriteTo.Console()
+            .WriteTo.File(
+                path: Path.Combine(AppContext.BaseDirectory, "logs", "test-.txt"),
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 7)
+            .WriteTo.Seq("http://localhost:5341/");
+    })
     .ConfigureServices(services =>
     {
         services.AddTransient<MyClass>();
-    })
-    .Build();
+    });
 
-var t = host.Services.GetService<MyClass>();
-t?.DoSomething();
+var host = builder.Build();
 
-await host.RunAsync();
+// Optional: run some startup code
+var myClass = host.Services.GetRequiredService<MyClass>();
+myClass.DoSomething();
 
-static IConfigurationRoot BuildConfig()
-{
-    var config = new ConfigurationBuilder().AddJsonFile(Directory.GetCurrentDirectory() + @"\appsettings.json").AddEnvironmentVariables().Build();
-    return config;
-}
+await host.RunAsync(); // <-- Not really needed for a console app, but good practice if you want to add hosted services later
